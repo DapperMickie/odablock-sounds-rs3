@@ -1,6 +1,6 @@
 # Odablock Sounds RS3
 
-Clone the main branch into your beta client's dev_plugins directory and run `python tools/sync_odablock_assets.py` before enabling the plugin. The sound and emote assets are served from separate branches.
+Download the [beta install ZIP](https://github.com/DapperMickie/odablock-sounds-rs3/releases/tag/v0.7.0) and extract its contents into the beta client's `dev_plugins/odablock-sounds-rs3` directory. The ZIP includes the sounds, emote images, and emote catalog. The client loads them from the installed package on startup.
 
 
 This RS3 beta port of [Odablock Sounds](https://github.com/DapperMickie/odablock-sounds) uses converted clips from the local RuneLite sound pack. It recognizes English game messages and handles reconnect transitions.
@@ -37,7 +37,9 @@ Enable **Livestream alert** and **Plugin announcement** under **Sounds → Extra
 
 Play **Terry** and **Odablock Warriors** from **Settings → Music**. Both tracks use the RS3 music volume and have their own stop control. Gameplay cues can play while a track continues.
 
-### Refresh assets
+### Build and refresh assets (maintainers)
+
+From the published source checkout, run `python tools/build_odablock_release.py` to build a complete install ZIP in `dist/`.
 
 The [Odablock Sounds RS3 repository](https://github.com/DapperMickie/odablock-sounds-rs3) keeps plugin code on `main`, ready-to-play Ogg Vorbis files on `sounds`, and PNGs with their trigger catalog on `emotes`. The updater checks each asset branch's version and verifies SHA-256 checksums before installing files. It regenerates the local emote catalog from the branch manifest. New sound categories still need an RS3 trigger and a resource mapping.
 
