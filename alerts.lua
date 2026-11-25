@@ -1,5 +1,13 @@
 local Alerts = {}
 
+local function reportMessage(message)
+    if Plugin.HasPermission(PluginPermissions.chatAccess) then
+        Chat.AddMessage(message)
+    else
+        print(message)
+    end
+end
+
 local escapes = { ['"'] = '"', ['\\'] = '\\', ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
 
 -- Both upstream feeds are flat JSON objects with string or boolean values.
@@ -86,10 +94,10 @@ function Alerts.new(enabled, play)
             feed.last = identity
             if identity and identity ~= previous then
                 local title = safeText(data.title)
-                Chat.AddMessage("[Odablock] Live on Kick" .. (title ~= "" and (" | " .. title) or "."))
+                reportMessage("[Odablock] Live on Kick" .. (title ~= "" and (" | " .. title) or "."))
                 if previous ~= nil then play(feed.category) end
             elseif previous and not identity then
-                Chat.AddMessage("[Odablock] The livestream ended.")
+                reportMessage("[Odablock] The livestream ended.")
             end
         else
             local message = safeText(data.message)
@@ -97,7 +105,7 @@ function Alerts.new(enabled, play)
             local previous = feed.last
             feed.last = identity
             if message ~= "" and previous and previous ~= identity then
-                Chat.AddMessage("[Odablock announcement] " .. message)
+                reportMessage("[Odablock announcement] " .. message)
                 play(feed.category)
             end
         end
@@ -133,7 +141,7 @@ function Alerts.new(enabled, play)
                             if data and feed.category == "livestream" then
                                 status = data.live and "live." or "offline."
                             end
-                            Chat.AddMessage("[Odablock] " .. label .. " " .. status)
+                            reportMessage("[Odablock] " .. label .. " " .. status)
                         end
                     end)
                 end)
@@ -141,7 +149,7 @@ function Alerts.new(enabled, play)
                     feed.request = nil
                     if feed.report then
                         feed.report = nil
-                        Chat.AddMessage("[Odablock] Could not open " .. feed.file .. ".")
+                        reportMessage("[Odablock] Could not open " .. feed.file .. ".")
                     end
                 end
             end
@@ -150,11 +158,11 @@ function Alerts.new(enabled, play)
 
     local function checkNow(tick)
         if not enabled("livestream") and not enabled("announcement") then
-            Chat.AddMessage("[Odablock] Enable Livestream alert or Plugin announcement under Sounds first.")
+            reportMessage("[Odablock] Enable Livestream alert or Plugin announcement under Sounds first.")
             return
         end
         if not Plugin.HasPermission(PluginPermissions.httpAccess) then
-            Chat.AddMessage("[Odablock] Alert feeds need the optional HTTP permission.")
+            reportMessage("[Odablock] Alert feeds need the optional HTTP permission.")
             return
         end
         for _, feed in ipairs(feeds) do

@@ -44,6 +44,7 @@ local events = {
     { "hair", "Hairdresser", "hair", 3, "^you have changed your hairstyle[!%.]?$" },
     { "snowball", "Hit by a snowball", "snowball", 2, "^you (.+) hit by a snowball[!%.]?$" },
     { "loot", "Your broadcasted rare drop", "loot", 1 },
+    { "valuable_drop", "Valuable ground drop", "loot", 1 },
     { "boss_unique", "Boss unique reward", "boss_unique", 2 },
     { "barrows_empty", "Empty Barrows chest", "barrows_empty", 1 },
     { "dharok_block", "Dharok axe block", "dharok_block", 3 },
@@ -177,14 +178,23 @@ local function enabled(category)
         return value
     end
     return category ~= "welcome" and category ~= "livestream" and category ~= "announcement"
+        and category ~= "valuable_drop"
 end
 
 local function isAutomatic(entry)
     local category = entry[1]
     return #entry > 4 or category == "level" or category == "milestone"
         or category == "quest" or category == "collection"
-        or category == "welcome" or category == "disconnect" or category == "loot"
-        or category == "livestream" or category == "announcement"
+        or category == "welcome" or category == "disconnect" or category == "loot" or category == "boss_unique"
+        or category == "livestream" or category == "announcement" or category == "valuable_drop"
+end
+
+local function reportMessage(message)
+    if Plugin.HasPermission(PluginPermissions.chatAccess) then
+        Chat.AddMessage(message)
+    else
+        print(message)
+    end
 end
 
 local alerts = require("alerts").new(enabled, play)
@@ -195,7 +205,7 @@ local function announce(category)
     end
     play(category)
     if settings.captions then
-        Chat.AddMessage("[Odablock] " .. byCategory[category][2])
+        reportMessage("[Odablock] " .. byCategory[category][2])
     end
 end
 
@@ -414,7 +424,7 @@ local function previewEmote(index)
     end
     local entry = emoteCatalog[index]
     if showEmote(entry[1], localPlayer(), entry[2]) then
-        Chat.AddMessage("[Odablock emote] " .. entry[2])
+        reportMessage("[Odablock emote] " .. entry[2])
     end
 end
 
@@ -459,6 +469,7 @@ local function developerLog(kind, detail)
     if not settings.developerMode then return end
     local line = ("[Odablock dev %d] %s %s"):format(tick, kind, detail:gsub("[\r\n]", " "):sub(1, 240))
     print(line)
+    if not Plugin.urls.developerLog then return end
     if #developerLines >= 160 then
         table.remove(developerLines, 1)
     end
@@ -513,7 +524,7 @@ local function setDeveloperMode(value)
     save()
     if value then
         developerLog("capture", "Developer mode enabled")
-        if not Plugin.HasPermission(PluginPermissions.httpAccess) then
+        if Plugin.urls.developerLog and not Plugin.HasPermission(PluginPermissions.httpAccess) then
             print("[Odablock dev] File logging needs httpAccess. Events are in the console.")
         end
     else
@@ -530,6 +541,29 @@ Event.VarTransmit.Subscribe("odablock-sounds-rs3-developer-vars", function(event
         developerLog("var", ("%s (%d): %s -> %s"):format(
             event.var.configName, event.var.id, tostring(event.oldValue), tostring(event.newValue)))
     end
+end)
+
+-- RS3 reports Combat Mastery tasks with the same "You have completed: 'Name' - ..."
+-- text as other achievements. The completed-count variable rises about 60 ticks
+-- later, once per batch of combat achievements. Requiring a recent achievement
+-- message keeps the value sent at login from playing the sound.
+local combatAchievementCountVar = 12119
+local achievementMessageAt
+local achievementWindow = 250
+
+Event.VarTransmit.Subscribe("odablock-sounds-rs3-combat-mastery", function(event)
+    local var = event.var
+    if not var or (var.id ~= combatAchievementCountVar
+        and var.configName ~= "COMBAT_MASTERY_COMPLETED_ACHIEVEMENT_COUNT") then
+        return
+    end
+    local oldValue, newValue = tonumber(event.oldValue), tonumber(event.newValue)
+    if not oldValue or not newValue or oldValue < 0 or newValue <= oldValue
+        or not achievementMessageAt or tick - achievementMessageAt > achievementWindow then
+        return
+    end
+    achievementMessageAt = nil
+    announce("combat")
 end)
 
 local prayerDepletedAt
@@ -561,6 +595,13 @@ end
 local recentSkill = {}
 local cappedLevels = {}
 local lastMessage = {}
+local valuableDrops = require("valuable_drops").new(settings, enabled, announce, developerLog, normalize)
+Event.ObjStackEntityAdded.Subscribe("odablock-valuable-drops", function(event)
+    valuableDrops.observe(event.objType, event.count, event.isOwner)
+end)
+Event.ObjStackEntityChanged.Subscribe("odablock-valuable-drops", function(event)
+    valuableDrops.observe(event.objType, event.newCount - event.oldCount, event.isOwner)
+end)
 local ratTarget
 local removedRatAt
 local combatXPAt
@@ -593,6 +634,7 @@ end
 Event.Logic.Subscribe("odablock-sounds-rs3-clock", function(event)
     tick = event.logicTick
     alerts.update(tick)
+    valuableDrops.update(tick)
     if inlineResizeUntil and tick >= inlineResizeUntil then
         inlineResizeUntil = nil
         nextInlineScan = tick
@@ -699,10 +741,12 @@ Event.GameStateChanged.Subscribe("odablock-sounds-rs3-connection", function(even
         recentSkill = {}
         cappedLevels = {}
         lastMessage = {}
+        valuableDrops.reset()
         ratTarget = nil
         removedRatAt = nil
         combatXPAt = nil
         lastRatSound = nil
+        achievementMessageAt = nil
     end
     if event.oldState == GameState.GAME
         and (event.newState == GameState.RECONNECTING or event.newState == GameState.RECONNECTING_FULL)
@@ -713,6 +757,47 @@ Event.GameStateChanged.Subscribe("odablock-sounds-rs3-connection", function(even
         play("welcome")
     end
 end)
+
+local bossUniqueDrops = {
+    ["bottom of the last guardian's bow"] = true,
+    ["top of the last guardian's bow"] = true,
+    ["divine bowstring"] = true,
+    ["chaos roar ability codex"] = true,
+    ["codex of lost knowledge"] = true,
+    ["vestments of havoc boots"] = true,
+    ["vestments of havoc hood"] = true,
+    ["vestments of havoc robe bottom"] = true,
+    ["vestments of havoc robe top"] = true,
+    ["araxxi's eye"] = true,
+    ["araxxi's fang"] = true,
+    ["araxxi's web"] = true,
+    ["croesus spore sack"] = true,
+    ["croesus sporehammer"] = true,
+    ["incomplete cryptbloom boots"] = true,
+    ["incomplete cryptbloom bottoms"] = true,
+    ["incomplete cryptbloom gloves"] = true,
+    ["incomplete cryptbloom helm"] = true,
+    ["incomplete cryptbloom top"] = true,
+    ["scripture of bik"] = true,
+    ["croesus foultorch"] = true,
+    ["frozen core of leng"] = true,
+    ["leng artefact"] = true,
+    ["scripture of wen"] = true,
+    ["divert ability codex"] = true,
+    ["staff of armadyl's fractured shaft"] = true,
+    ["fractured stabilisation gem"] = true,
+    ["fractured armadyl symbol"] = true,
+    ["greater concentrated blast ability codex"] = true,
+    ["pair of kerapac's wristwraps"] = true,
+    ["scripture of jas"] = true,
+    ["dormant zaros godsword"] = true,
+    ["dormant seren godbow"] = true,
+    ["dormant staff of sliske"] = true,
+    ["reprisal ability codex"] = true,
+    ["orb of pure anima"] = true,
+    ["orb of volcanic anima"] = true,
+    ["orb of corrupted anima"] = true,
+}
 
 local function classifyBroadcast(text)
     if not Player.IsAvailable() then
@@ -730,23 +815,36 @@ local function classifyBroadcast(text)
         return
     end
     local reward = body:sub(#prefix + 1)
-    if reward:match("^.+, the .+ pet drop") then
+    if reward:match("^.+, the .+ pet drop") or reward:match("^.+ pet drop after .+ kills?[!%.]$") then
         return "pet", message
     end
-    if reward:match("^.+ drop[!%.]$") then
-        return "loot", message
+    local item = reward:match("^(.+) drop[!%.]$")
+    if item then
+        local itemName = item:gsub("^an? ", ""):gsub("^%d+ ", "")
+        if bossUniqueDrops[itemName] and enabled("boss_unique") then
+            return "boss_unique", message, itemName
+        end
+        return "loot", message, itemName
     end
 end
 
 Event.ChatMessage.Subscribe("odablock-sounds-rs3", function(event)
     local kind = event.chatType
-    local category, message, level, skill
+    local category, message, level, skill, rewardItem
     if kind == ChatType.BROADCAST or kind == ChatType.BROADCAST_WORLD
         or kind == ChatType.BROADCAST_GLOBAL or kind == ChatType.BROADCAST_FRIENDS then
-        category, message = classifyBroadcast(event.chatMessage)
+        category, message, rewardItem = classifyBroadcast(event.chatMessage)
+        if settings.developerMode and category then
+            developerLog("reward broadcast", ("type=%s match=%s %s"):format(
+                tostring(kind), category, event.chatMessage))
+        end
     elseif kind == ChatType.GENERAL or kind == ChatType.GENERAL_LINKABLE or kind == ChatType.SPAM
         or kind == ChatType.TRADE_NOTIFICATION or kind == ChatType.ENGINE then
         category, message, level, skill = classify(event.chatMessage)
+        if not category and (not event.senderNameSimple or event.senderNameSimple == "")
+            and normalize(event.chatMessage):find("you have completed: '", 1, true) then
+            achievementMessageAt = tick
+        end
         if settings.developerMode and (not event.senderNameSimple or event.senderNameSimple == "") then
             developerLog("game message", ("type=%s match=%s %s"):format(
                 tostring(kind), category or "-", event.chatMessage))
@@ -774,7 +872,7 @@ Event.ChatMessage.Subscribe("odablock-sounds-rs3", function(event)
             prayerDepletedAt = nil
             redemptionAt = tick
             announce("redemption")
-        else
+        elseif not rewardItem or valuableDrops.broadcast(rewardItem) then
             announce(category)
         end
     end
@@ -799,15 +897,15 @@ Event.KeyDown.Subscribe("odablock-sounds-rs3-test", function(event)
 
     local category = sample[1]
     if modifiers == 6 then
-        Chat.AddMessage("[Odablock test] " .. sample[2])
+        reportMessage("[Odablock test] " .. sample[2])
         category = classify(sample[2])
         if category ~= sample[1] then
-            Chat.AddMessage("[Odablock test] Message did not match the expected trigger.")
+            reportMessage("[Odablock test] Message did not match the expected trigger.")
             return
         end
     end
 
-    Chat.AddMessage("[Odablock test] " .. category .. ": " .. play(category))
+    reportMessage("[Odablock test] " .. category .. ": " .. play(category))
 end)
 
 -- Settings groups for the panel. Every event appears exactly once.
@@ -815,7 +913,7 @@ local soundGroups = {
     { "Progress", "Skills, quests, the collection log and achievements.",
         { "level", "milestone", "max_total", "quest", "collection", "area", "combat" } },
     { "Loot and pets", "Your own broadcasts and rewards.",
-        { "loot", "pet", "boss_unique", "barrows_empty" } },
+        { "loot", "valuable_drop", "pet", "boss_unique", "barrows_empty" } },
     { "Combat", "Deaths, kills, prayers and special attacks.",
         { "death", "pvp", "freeze", "prayer", "redemption", "phoenix", "vengeance", "ruby", "dds", "ags",
             "dharok_block", "dharok_chop", "dharok_hack", "dharok_smash" } },
@@ -870,14 +968,18 @@ local function clipLabel(category)
 end
 
 local function previewSound(category)
-    Chat.AddMessage("[Odablock test] " .. play(category))
+    reportMessage("[Odablock test] " .. play(category))
 end
 
 local function testInlineEmotes()
+    if not Plugin.HasPermission(PluginPermissions.chatAccess) then
+        print('[Odablock] Inline emotes need Chat Access.')
+        return
+    end
     local sender = "[Odablock inline test]"
     local message = "Before aiaiai kek after"
     inlineEmotes.remember(sender:lower(), message:lower())
-    Chat.AddMessage(sender .. ": " .. message)
+    reportMessage(sender .. ": " .. message)
 end
 
 local panel
@@ -1091,6 +1193,29 @@ local function buildGeneralPage(page)
             save()
         end,
     })
+    page:AddText({ text = "Valuable ground drop minimum (GP)", rowBackground = false })
+    local thresholdStatus
+    local function saveThreshold(field)
+        local text = field:GetText():match("^%s*(.-)%s*$")
+        local value = text:match("^%d+$") and tonumber(text)
+        if not value or value < 1 or value > math.maxinteger or math.type(value) ~= "integer" then
+            thresholdStatus.content = "Enter a positive whole GP amount."
+            return
+        end
+        settings.valuableDropThreshold = value
+        save()
+        thresholdStatus.content = ("Saved %d GP."):format(value)
+        field:SetText(value)
+    end
+    local thresholdField = page:AddTextField({
+        text = tostring(settings.valuableDropThreshold or 1000000),
+        width = 180, maxLength = 19, rowBackground = false,
+        filterMode = ui.InputFieldFilterMode.NUMBERS_AS_TEXT,
+        onSubmit = saveThreshold,
+    })
+    page:AddSimpleButton("Save threshold", function() saveThreshold(thresholdField) end,
+        { inline = true, width = 130 })
+    thresholdStatus = page:AddText({ text = "", rowBackground = false })
     page:AddCheckboxButton({
         { text = "Show captions in local chat", value = "captions", selected = settings.captions == true,
             tooltip = "Adds the sound name to chat when it plays" },
@@ -1361,6 +1486,7 @@ end)
 
 function PluginShutdown()
     alerts.stop()
+    valuableDrops.reset()
     inlineEmotes.clear()
     if prettyWindow then prettyWindow:Destroy() end
     if settingsView then settingsView:Destroy() end

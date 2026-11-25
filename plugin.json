@@ -1,13 +1,14 @@
 {
   "name": "Odablock Sounds RS3",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Plays Odablock clips for RuneScape events, with categorized per-sound and per-emote settings and previews.",
-  "contactEmailAddress": "replace-me@example.com",
+  "contactEmailAddress": "moe@odablock.net",
   "requiredPermissions": ["chatAccess"],
   "optionalPermissions": ["httpAccess"],
   "urls": {
     "developerLog": "http://127.0.0.1:43867/",
-    "alertFeed": "https://raw.githubusercontent.com/LogicalSoIutions/odablock-sounds-live/refs/heads/main/"
+    "alertFeed": "https://raw.githubusercontent.com/LogicalSoIutions/odablock-sounds-live/refs/heads/main/",
+    "lootPrices": "https://secure.runescape.com/m=itemdb_rs/api/"
   },
   "hasSettingsIcon": true,
   "optionalDependencies": {

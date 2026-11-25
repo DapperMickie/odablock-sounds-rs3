@@ -1,6 +1,6 @@
 # Odablock Sounds RS3
 
-Download the [beta install ZIP](https://github.com/DapperMickie/odablock-sounds-rs3/releases/tag/v0.7.0) and extract its contents into the beta client's `dev_plugins/odablock-sounds-rs3` directory. The ZIP includes the sounds, emote images, and emote catalog. The client loads them from the installed package on startup.
+Download the [beta install ZIP](https://github.com/DapperMickie/odablock-sounds-rs3/releases/tag/v0.8.0) and extract its contents into the beta client's `dev_plugins/odablock-sounds-rs3` directory. The ZIP includes the sounds, emote images, and emote catalog. The client loads them from the installed package on startup.
 
 
 This RS3 beta port of [Odablock Sounds](https://github.com/DapperMickie/odablock-sounds) uses converted clips from the local RuneLite sound pack. It recognizes English game messages and handles reconnect transitions.
@@ -29,7 +29,7 @@ Ctrl+Alt+F8, F9, and F10 test sample messages for level-up, quest completion, an
 
 Skill updates and local level-up messages can trigger the same sound. The plugin suppresses duplicate cues for the same skill and level and ignores temporary buffs and drains on the skill-event path. Additional game-message patterns include milestones, Area Tasks, Combat Mastery, pet unlocks, death, PvP kills, selected combat effects, trades, and NPC interactions. These additional patterns still need live RS3 examples for validation.
 
-Rare-drop and skilling-pet broadcasts play their clips when the message names your character as the recipient. The sound triggers ignore public player chat and broadcasts naming other players. Drops without a broadcast, separate boss-unique detection, empty Barrows chests, Dharok axe styles, and bank opening still need reliable signals. Their sounds can be previewed. Custom Barrows faces and settings import/export are pending.
+Rare-drop and skilling-pet broadcasts play their clips when the message names your character as the recipient. The sound triggers ignore public player chat and broadcasts naming other players. Enable Valuable ground drop under Sounds to hear rare-drop audio when an owned ground item meets your minimum GP value. Set the exact amount under Settings. The cue requires HTTP Access to fetch GE guide prices. Selected boss-unique broadcasts use the separate boss-unique clip. Empty Barrows chests, Dharok axe styles, and bank opening are available for preview. Custom Barrows faces and settings import/export are pending.
 
 ### Alerts and music
 
@@ -39,7 +39,7 @@ Play **Terry** and **Odablock Warriors** from **Settings → Music**. Both track
 
 ### Build the release
 
-The repository includes the Ogg sounds in `resources/`, PNG emotes in `resources/emotes/`, and chat tokens in `emote_catalog.lua`. Run `python tools/build_odablock_release.py` from the source checkout to build the install ZIP in `dist/`. The build uses the checked-in assets.
+The repository includes the Ogg sounds in `resources/`, PNG emotes in `resources/emotes/`, and chat tokens in `emote_catalog.lua`. Run `python tools/build_odablock_release.py` from the source checkout to build the install ZIP in `dist/`. The build uses the checked-in assets and omits the local debug listener URL and local PrettyUI alias from the packaged manifest.
 
 ### Emotes
 
