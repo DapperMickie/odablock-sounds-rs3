@@ -37,18 +37,9 @@ Enable **Livestream alert** and **Plugin announcement** under **Sounds → Extra
 
 Play **Terry** and **Odablock Warriors** from **Settings → Music**. Both tracks use the RS3 music volume and have their own stop control. Gameplay cues can play while a track continues.
 
-### Build and refresh assets (maintainers)
+### Build the release
 
-From the published source checkout, run `python tools/build_odablock_release.py` to build a complete install ZIP in `dist/`.
-
-The [Odablock Sounds RS3 repository](https://github.com/DapperMickie/odablock-sounds-rs3) keeps plugin code on `main`, ready-to-play Ogg Vorbis files on `sounds`, and PNGs with their trigger catalog on `emotes`. The updater checks each asset branch's version and verifies SHA-256 checksums before installing files. It regenerates the local emote catalog from the branch manifest. New sound categories still need an RS3 trigger and a resource mapping.
-
-```powershell
-python tools/sync_odablock_assets.py
-python tools/sync_odablock_assets.py --target "$env:ProgramData\Jagex\RuneScape-BETA\dev_plugins\odablock-sounds-rs3"
-```
-
-Run `prf` and `prl odablock-sounds-rs3` after the installed pack changes. The published clips are already converted, so the updater only needs Python.
+The repository includes the Ogg sounds in `resources/`, PNG emotes in `resources/emotes/`, and chat tokens in `emote_catalog.lua`. Run `python tools/build_odablock_release.py` from the source checkout to build the install ZIP in `dist/`. The build uses the checked-in assets.
 
 ### Emotes
 
